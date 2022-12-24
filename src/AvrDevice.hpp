@@ -47,6 +47,7 @@ class AvrDevice : public QObject
 	Q_PROPERTY(eu::tgcm::avrremote::RemoteIntProperty maxVolume READ maxVolume NOTIFY maxVolumeChanged)
 
 	Q_PROPERTY(bool standby READ standby NOTIFY standbyChanged)
+	Q_PROPERTY(bool muted READ muted NOTIFY mutedChanged)
 
 	const QString &name() const;
 	void setName(const QString &newName);
@@ -58,8 +59,16 @@ class AvrDevice : public QObject
 	void setConnectionStatus(int newConnectionStatus);
 
 	RemoteIntProperty volume() const;
+	/**
+	 * Reread the volume from the remote device
+	 */
+	Q_INVOKABLE void refreshVolume();
 
 	RemoteStringProperty currentSource() const;
+	/**
+	 * Reread the current source from the remote device
+	 */
+	Q_INVOKABLE void refreshCurrentSource();
 	void setCurrentSource(const QString &newCurrentSource);
 
 	const QStringList &sources() const;
@@ -73,10 +82,13 @@ class AvrDevice : public QObject
 
 	bool standby() const;
 
+	bool muted() const;
+
 	Q_INVOKABLE void volumeUp();
 	Q_INVOKABLE void volumeDown();
 	Q_INVOKABLE void setVolume(int volume);
 	Q_INVOKABLE void setSource(int sourceIndex);
+	Q_INVOKABLE void setMuted(bool muted);
 
 	/**
 	 * Sets the current power standby, for main zone. True to set to standby mode
@@ -102,6 +114,8 @@ class AvrDevice : public QObject
 	void standbyChanged();
 
 	void currentSourceIndexChanged();
+
+	void mutedChanged();
 
   private:
 	void interpretResponse_(char const* data, int len);

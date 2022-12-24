@@ -11,6 +11,7 @@ class ParserCallbacks
 	int maxVolume = -1;
 	bool powerStatus = false;
 	Source source;
+	bool muted = false;
 
 	void masterVolumeChanged(int newMasterVolume)
 	{
@@ -31,8 +32,12 @@ class ParserCallbacks
 	{
 		source = newSource;
 	}
-};
 
+	void mutedChanged(bool newMuted)
+	{
+		muted = newMuted;
+	}
+};
 
 class TestParser : public QObject
 {
@@ -47,12 +52,12 @@ class TestParser : public QObject
 
 		std::size_t res = 0;
 		std::size_t total = 0;
-		char const* cur = line;
+		std::string_view cur(line);
 		do
 		{
-			res = p.parse(cur, strlen(line) - total);
+			res = p.parse(cur);
 			total += res;
-			cur += res;
+			cur = cur.substr(res);
 		} while (res > 0);
 
 		QVERIFY(c.masterVolume == 300);
@@ -69,9 +74,11 @@ class TestParser : public QObject
 
 		std::size_t res = 0;
 		std::size_t total = 0;
-		res = p.parse(line, strlen(line));
+		std::string_view cur = line;
+		res = p.parse(cur);
 		total += res;
-		res = p.parse(line + total, strlen(line) - total);
+		cur = cur.substr(res);
+		res = p.parse(cur);
 		total += res;
 		QVERIFY(c.masterVolume == 300);
 		QVERIFY(c.maxVolume == 650);
@@ -85,15 +92,15 @@ class TestParser : public QObject
 
 		char const line[] = "PWON\r";
 
-		std::size_t res = p.parse(line, strlen(line));
+		std::size_t res = p.parse(line);
 		QVERIFY(c.powerStatus);
 		QVERIFY(res == 5u);
 		char line2[] = "PWSTAND";
-		res = p.parse(line2, strlen(line2));
+		res = p.parse(line2);
 		QVERIFY(res == strlen(line2));
 		QVERIFY(c.powerStatus);
 		char line3[] = "BY\r";
-		res = p.parse(line3, strlen(line3));
+		res = p.parse(line3);
 		QVERIFY(!c.powerStatus); // power update
 		QVERIFY(res == 3);
 	}
@@ -105,14 +112,14 @@ class TestParser : public QObject
 		MarantzUartParser<ParserCallbacks> p(c);
 		c.powerStatus = false;
 		std::size_t total = 0;
-		auto res = p.parse(line, strlen(line));
+		auto res = p.parse(line);
 		QVERIFY(res == 5);
 		total += res;
-		res = p.parse(line + total, strlen(line + total));
+		res = p.parse(line + total);
 		total += res;
 		QVERIFY(res == 5);
 		QVERIFY(total == 10);
-		res = p.parse(line + total, strlen(line + total));
+		res = p.parse(line + total);
 		QVERIFY(res == 5);
 		QVERIFY(c.powerStatus);
 	}
@@ -143,7 +150,20 @@ class TestParser : public QObject
 		testSourceHelper_(c, p, "SIAUX7\r", Source::Aux7);
 		testSourceHelper_(c, p, "SINET\r", Source::Network);
 		testSourceHelper_(c, p, "SIBT\r", Source::Bluetooth);
+	}
 
+	void testMuted()
+	{
+		char const* line = "MUON\r";
+		ParserCallbacks c;
+		MarantzUartParser<ParserCallbacks> p(c);
+		auto res = p.parse(line);
+		QVERIFY(res == strlen(line));
+		QVERIFY(c.muted);
+		char const* line2 = "MUOFF\r";
+		res = p.parse(line2);
+		QVERIFY(res == strlen(line2));
+		QVERIFY(!c.muted);
 	}
 
   private:
@@ -152,7 +172,7 @@ class TestParser : public QObject
 	                       char const* line,
 	                       Source expectedResult)
 	{
-		auto res = p.parse(line, strlen(line));
+		auto res = p.parse(line);
 		QVERIFY(res == strlen(line));
 		QVERIFY(c.source == expectedResult);
 	}
@@ -160,4 +180,3 @@ class TestParser : public QObject
 
 QTEST_MAIN(TestParser)
 #include "test_parser.moc"
-

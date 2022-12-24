@@ -1,4 +1,4 @@
-#include "AVRDevice.hpp"
+#include "AvrDevice.hpp"
 
 #include "marantzuart.hpp"
 
@@ -63,6 +63,8 @@ class AvrDevicePrivate
 
 	bool standby_{};
 
+	bool muted_{};
+
 	bool initPhase_{};
 
 	avrcommand::MarantzUartParser<AvrDevicePrivate> parser_;
@@ -72,10 +74,12 @@ class AvrDevicePrivate
 	void maxVolumeChanged(int maxVolume);
 	void powerChanged(bool power);
 	void sourceChanged(avrcommand::Source source);
+	void mutedChanged(bool muted);
 
   private:
 	void setVolume_(int volume);
 	void setStandby_(bool standby);
+	void setMuted_(bool mute);
 };
 
 AvrDevice::AvrDevice(QObject* parent) : QObject(parent), d_ptr(new AvrDevicePrivate(this))
@@ -126,6 +130,12 @@ void AvrDevice::setConnectionStatus(int newConnectionStatus)
 RemoteIntProperty AvrDevice::volume() const
 {
 	return d_ptr->volume_;
+}
+
+void AvrDevicePrivate::setMuted_(bool muted)
+{
+	muted_ = muted;
+	emit q_ptr->mutedChanged();
 }
 
 void AvrDevicePrivate::setVolume_(int newVolume)
@@ -235,13 +245,18 @@ bool AvrDevice::standby() const
 	return d_ptr->standby_;
 }
 
+bool AvrDevice::muted() const
+{
+	return d_ptr->muted_;
+}
+
 void AvrDevice::interpretResponse_(char const* data, int len)
 {
 	std::size_t res;
 	do
 	{
 		qDebug() << "Will parse " << QByteArray(data, len);
-		res = d_ptr->parser_.parse(data, len);
+		res = d_ptr->parser_.parse(std::string_view(data, len));
 		data += res;
 		len -= res;
 	} while (res > 0 && len > 0);
@@ -250,10 +265,11 @@ void AvrDevice::interpretResponse_(char const* data, int len)
 void AvrDevicePrivate::masterVolumeChanged(int volume)
 {
 	setVolume_(volume);
-	if (initPhase_)
-	{
-		socket_->write(avrcommand::querySourceInput);
-	}
+}
+
+void AvrDevicePrivate::mutedChanged(bool muted)
+{
+	setMuted_(muted);
 }
 
 void AvrDevice::volumeUp()
@@ -282,6 +298,25 @@ void AvrDevice::setVolume(int volume)
 		auto res = avrcommand::setMasterVolume(volume, d);
 		d_ptr->socket_->write(res.data(), res.size());
 	}
+}
+
+void AvrDevice::refreshVolume()
+{
+	d_ptr->socket_->write(avrcommand::queryMasterVolume);
+	d_ptr->socket_->write(avrcommand::queryMute);
+}
+
+void AvrDevice::refreshCurrentSource()
+{
+	d_ptr->socket_->write(avrcommand::querySourceInput);
+}
+
+void AvrDevice::setMuted(bool muted)
+{
+	if (muted)
+		d_ptr->socket_->write(avrcommand::muteOnCommand);
+	else
+		d_ptr->socket_->write(avrcommand::muteOffCommand);
 }
 
 void AvrDevice::setPowerStandby(bool standby)

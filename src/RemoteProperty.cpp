@@ -20,6 +20,11 @@ RemoteProperty::State RemoteIntProperty::state() const
 	return s_;
 }
 
+void RemoteProperty::refresh()
+{
+	emit refreshRequested();
+}
+
 int RemoteIntProperty::value() const
 {
 	return v_;
@@ -62,8 +67,6 @@ void RemoteStringProperty::setValue(QString v)
 {
 	v_ = v;
 }
-
-
-}
-}
-}
+} // namespace avrremote
+} // namespace tgcm
+} // namespace eu

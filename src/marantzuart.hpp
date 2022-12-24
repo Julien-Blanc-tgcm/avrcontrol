@@ -1,5 +1,5 @@
-#ifndef JBC_MARANTZUART_H
-#define JBC_MARANTZUART_H
+#ifndef EU_TGCM_AVRCOMMAND_MARANTZUART_H
+#define EU_TGCM_AVRCOMMAND_MARANTZUART_H
 
 #include <cassert>
 #include <cctype>
@@ -102,52 +102,63 @@ class MarantzUartParser
 	MarantzUartParser& operator=(MarantzUartParser const&) = delete;
 	MarantzUartParser& operator=(MarantzUartParser&&) = delete;
 
-	std::size_t parse(char const* data, std::size_t size)
+	std::size_t parse(std::string_view data)
 	{
 		switch (s_)
 		{
 			case InternalState::Begin:
-				return parseBegin_(data, size);
+				return parseBegin_(data);
 			case InternalState::Invalid: {
-				return parseInvalid_(data, size);
+				return parseInvalid_(data);
 			}
 			case InternalState::Parse_M:
-				return parseM_(data, size);
+				return parseM_(data);
 			case InternalState::Parse_MV:
-				return parseMV_(data, size);
+				return parseMV_(data);
 			case InternalState::Parse_MVM:
-				return parseMVM_(data, size);
+				return parseMVM_(data);
 			case InternalState::Parse_MVMA:
-				return parseMVMA_(data, size);
+				return parseMVMA_(data);
 			case InternalState::Parse_MVMAX:
-				return parseMVMAX_(data, size);
+				return parseMVMAX_(data);
 			case InternalState::Parse_MVMAX2:
-				return parseMVMAX2_(data, size);
+				return parseMVMAX2_(data);
+			case InternalState::Parse_MU:
+				return parseMU_(data);
+			case InternalState::Parse_MUO:
+				return parseMUO_(data);
+			case InternalState::Parse_MUOF:
+				return parseMUOF_(data);
 			case InternalState::Parse_P:
-				return parseP_(data, size);
+				return parseP_(data);
 			case InternalState::Parse_PW:
-				return parsePW_(data, size);
+				return parsePW_(data);
 			case InternalState::Parse_PWO:
-				return parsePWO_(data, size);
+				return parsePWO_(data);
 			case InternalState::Parse_PWON:
-				return parsePWON_(data, size);
+				return parsePWON_(data);
 			case InternalState::Parse_PWS:
-				return parsePWS_(data, size);
+				return parsePWS_(data);
 			case InternalState::Parse_S:
-				return parseS_(data, size);
+				return parseS_(data);
 			case InternalState::Parse_SI:
-				return parseSI_(data, size);
+				return parseSI_(data);
 		}
 		assert(false && "parser in a very bad state");
-		return size; // should not appen !!!
+		return data.size(); // should not happen !!!
 	}
 
   private:
 	enum class InternalState
 	{
-		Begin, /**< Initial state, wait for a reply */
+		Begin,   /**< Initial state, wait for a reply */
 		Invalid, /**< Invalid state, wait for a '\r' to go back to begin */
 		Parse_M,
+		Parse_MU,
+		Parse_MUO,
+		Parse_MUON,
+		Parse_MUOF,
+		Parse_MUOFF,
 		Parse_MV,
 		Parse_MVM,
 		Parse_MVMA,
@@ -171,54 +182,123 @@ class MarantzUartParser
 	 */
 	int lastValue_ = 0;
 
-	std::size_t parseBegin_(char const* data, std::size_t size)
+	std::size_t parseBegin_(std::string_view data)
 	{
 		lastValue_ = 0; // always reinitialize last value at begin
-		if (size == 0)
+		if (data.empty())
 			return 0;
 		if (data[0] == 'M')
-			return parseM_(data + 1, size - 1) + 1;
+			return parseM_(data.substr(1)) + 1;
 		if (data[0] == 'P')
-			return parseP_(data + 1, size - 1) + 1;
+			return parseP_(data.substr(1)) + 1;
 		if (data[0] == 'S')
-			return parseS_(data + 1, size - 1) + 1;
+			return parseS_(data.substr(1)) + 1;
 		// else need to implement
-		return parseInvalid_(data, size);
+		return parseInvalid_(data);
 	}
 
-#define PARSE_SINGLE_EXPECTED_CHAR(funcName, state, expectedChar, nextFunc) \
-	std::size_t funcName(char const* data, std::size_t size) \
-	{ \
-		if (size == 0) \
-		{ \
-			s_ = state; \
-			return 0; \
-		}\
-		if (data[0] == expectedChar) \
-			return nextFunc(data + 1, size - 1) + 1; \
-		return parseInvalid_(data, size); \
+	// parse invalid, parse everything until finding a \r, allows ignoring
+	// unknown status responses
+	std::size_t parseInvalid_(std::string_view data)
+	{
+		std::size_t i = 0;
+		while (i < data.size() && data[i] != '\r')
+			i += 1;
+		if (i < data.size()) // '\r' found
+		{
+			s_ = InternalState::Begin;
+			i += 1; // consume the '\r'
+		}
+		else
+			s_ = InternalState::Invalid;
+		return i; // in all cases, we consumed i chars
 	}
 
-	PARSE_SINGLE_EXPECTED_CHAR(parseM_, InternalState::Parse_M, 'V', parseMV_);
+#define IF_EMPTY_RETURN_0(data, state)                                                                                 \
+	if (data.empty())                                                                                                  \
+	{                                                                                                                  \
+		s_ = state;                                                                                                    \
+		return 0;                                                                                                      \
+	}
+
+#define IF_DATA_EQUAL_RETURN_NEXTFUNC(data, expectedChar, nextFunc)                                                    \
+	if (data[0] == expectedChar)                                                                                       \
+		return nextFunc(data.substr(1)) + 1;
+
+#define PARSE_SINGLE_EXPECTED_CHAR(funcName, state, expectedChar, nextFunc)                                            \
+	std::size_t funcName(std::string_view data)                                                                        \
+	{                                                                                                                  \
+		IF_EMPTY_RETURN_0(data, state)                                                                                 \
+		IF_DATA_EQUAL_RETURN_NEXTFUNC(data, expectedChar, nextFunc)                                                    \
+		return parseInvalid_(data);                                                                                    \
+	}
+
+#define PARSE_BINARY_BRANCH(funcName, state, expectedChar1, nextFunc1, expectedChar2, nextFunc2)                       \
+	std::size_t funcName(std::string_view data)                                                                        \
+	{                                                                                                                  \
+		IF_EMPTY_RETURN_0(data, state)                                                                                 \
+		IF_DATA_EQUAL_RETURN_NEXTFUNC(data, expectedChar1, nextFunc1)                                                  \
+		IF_DATA_EQUAL_RETURN_NEXTFUNC(data, expectedChar2, nextFunc2)                                                  \
+		return parseInvalid_(data);                                                                                    \
+	}
+
+#define PARSE_TERMINAL(funcName, state, callback)                                                                      \
+	std::size_t funcName(std::string_view data)                                                                        \
+	{                                                                                                                  \
+		IF_EMPTY_RETURN_0(data, state)                                                                                 \
+		if (data[0] == '\r')                                                                                           \
+		{                                                                                                              \
+			callback;                                                                                                  \
+			return 1;                                                                                                  \
+		}                                                                                                              \
+		return parseInvalid_(data);                                                                                    \
+	}
+
+	PARSE_BINARY_BRANCH(parseM_, InternalState::Parse_M, 'V', parseMV_, 'U', parseMU_);
+	PARSE_SINGLE_EXPECTED_CHAR(parseMU_, InternalState::Parse_MU, 'O', parseMUO_);
+	PARSE_BINARY_BRANCH(parseMUO_, InternalState::Parse_MUO, 'F', parseMUOF_, 'N', parseMUON_);
+	PARSE_SINGLE_EXPECTED_CHAR(parseMUOF_, InternalState::Parse_MUOFF, 'F', parseMUOFF_);
+	PARSE_TERMINAL(parseMUON_, InternalState::Parse_MUON, h_.mutedChanged(true));
+	PARSE_TERMINAL(parseMUOFF_, InternalState::Parse_MUOFF, h_.mutedChanged(false));
+
 	PARSE_SINGLE_EXPECTED_CHAR(parseMVM_, InternalState::Parse_MVM, 'A', parseMVMA_);
 	PARSE_SINGLE_EXPECTED_CHAR(parseMVMA_, InternalState::Parse_MVMA, 'X', parseMVMAX_);
 	PARSE_SINGLE_EXPECTED_CHAR(parseMVMAX_, InternalState::Parse_MVMAX, ' ', parseMVMAX2_);
 
-	std::size_t parseMVMAX2_(char const* data, std::size_t size)
+	PARSE_SINGLE_EXPECTED_CHAR(parseP_, InternalState::Parse_P, 'W', parsePW_);
+
+	PARSE_SINGLE_EXPECTED_CHAR(parsePWO_, InternalState::Parse_PWO, 'N', parsePWON_)
+	PARSE_TERMINAL(parsePWON_, InternalState::Parse_PWON, h_.powerChanged(true))
+
+	PARSE_SINGLE_EXPECTED_CHAR(parseS_, InternalState::Parse_S, 'I', parseSI_);
+
+	std::size_t parsePW_(std::string_view data)
 	{
-		if (size == 0)
+		IF_EMPTY_RETURN_0(data, InternalState::Parse_PW)
+		IF_DATA_EQUAL_RETURN_NEXTFUNC(data, 'O', parsePWO_);
+		if (data[0] == 'S')
+		{
+			lastValue_ = 0; // used as index
+			return parsePWS_(data.substr(1)) + 1;
+		}
+		return parseInvalid_(data);
+	}
+
+	std::size_t parseMVMAX2_(std::string_view data)
+	{
+		if (data.empty())
 		{
 			s_ = InternalState::Parse_MVMAX;
 			return 0;
 		}
 		std::size_t i = 0;
-		while (i < size && std::isdigit(data[i]))
+		while (i < data.size() && std::isdigit(data[i]))
 		{
 			lastValue_ = lastValue_ * 10;
 			lastValue_ += data[i] - '0';
 			i += 1;
 		}
-		if (i < size)
+		if (i < data.size())
 		{
 			if (data[i] == '\r') // found the '\r'
 			{
@@ -228,29 +308,25 @@ class MarantzUartParser
 				h_.maxVolumeChanged(lastValue_);
 				return i + 1;
 			}
-			return parseInvalid_(data + 1, size - 1) + 1;
+			return parseInvalid_(data.substr(1)) + 1;
 		}
 		s_ = InternalState::Parse_MVMAX;
 		return i;
 	}
 
-	std::size_t parseMV_(char const* data, std::size_t size)
+	std::size_t parseMV_(std::string_view data)
 	{
 		std::size_t i = 0;
-		if (size == 0)
-		{
-			s_ = InternalState::Parse_MV;
-			return 0;
-		}
+		IF_EMPTY_RETURN_0(data, InternalState::Parse_MV)
 		if (lastValue_ == 0 && data[i] == 'M')
-			return parseMVM_(data + 1, size - 1) + 1;
-		while (i < size && std::isdigit(data[i]))
+			return parseMVM_(data.substr(1)) + 1;
+		while (i < data.size() && std::isdigit(data[i]))
 		{
 			lastValue_ = lastValue_ * 10;
 			lastValue_ += (data[i] - '0');
 			i += 1;
 		}
-		if (i < size)
+		if (i < data.size())
 		{
 			if (data[i] == '\r') // found the '\r'
 			{
@@ -262,101 +338,26 @@ class MarantzUartParser
 			}
 			// else consume everything, did not understand command. Can skip char
 			// because it is not a \r
-			return parseInvalid_(data + i + 1, size - i - 1) + i + 1;
+			return parseInvalid_(data.substr(i + 1)) + i + 1;
 		}
 		// else needs more data
 		s_ = InternalState::Parse_MV;
 		return i;
 	}
 
-	std::size_t parseInvalid_(char const* data, std::size_t size)
-	{
-		std::size_t i = 0;
-		while (i < size && data[i] != '\r')
-			i += 1;
-		if (i < size) // '\r' found
-		{
-			s_ = InternalState::Begin;
-			i += 1; // consume the '\r'
-		}
-		else
-			s_ = InternalState::Invalid;
-		return i; // in all cases, we consumed i chars
-	}
-
-	std::size_t parseP_(char const* data, std::size_t size)
-	{
-		if (size == 0)
-		{
-			s_ = InternalState::Parse_P;
-			return 0;
-		}
-		if (data[0] == 'W')
-			return parsePW_(data + 1, size - 1) + 1;
-		return parseInvalid_(data, size);
-	}
-
-	std::size_t parsePW_(char const* data, std::size_t size)
-	{
-		if (size == 0)
-		{
-			s_ = InternalState::Parse_PW;
-			return 0;
-		}
-		if (data[0] == 'O')
-			return parsePWO_(data + 1, size - 1) + 1;
-		if (data[0] == 'S')
-		{
-			lastValue_ = 0; // used as index
-			return parsePWS_(data + 1, size - 1) + 1;
-		}
-		return parseInvalid_(data, size);
-	}
-
-	std::size_t parsePWO_(char const* data, std::size_t size)
-	{
-		if (size == 0)
-		{
-			s_ = InternalState::Parse_PWO;
-			return 0;
-		}
-		if (data[0] == 'N')
-		{
-			return parsePWON_(data + 1, size - 1) + 1;
-		}
-		return parseInvalid_(data, size);
-	}
-
-	std::size_t parsePWON_(char const* data, std::size_t size)
-	{
-		if (size == 0)
-		{
-			s_ = InternalState::Parse_PWON;
-			return 0;
-		}
-		if (data[0] == '\r')
-		{
-			h_.powerChanged(true);
-			s_ = InternalState::Begin;
-			return 1;
-		}
-		// else invalid
-		return parseInvalid_(data + 1, size -1) + 1;
-	}
-
-	std::size_t parsePWS_(char const* data, std::size_t size)
+	std::size_t parsePWS_(std::string_view data)
 	{
 		std::size_t nbConsumed = 0;
 #define CASE(step, expectedChar)                                                                                       \
 	case step:                                                                                                         \
-		if (size == nbConsumed)                                                                                        \
+		if (data.size() == nbConsumed)                                                                                 \
 		{                                                                                                              \
 			s_ = InternalState::Parse_PWS;                                                                             \
 			lastValue_ += nbConsumed;                                                                                  \
 			return nbConsumed;                                                                                         \
 		}                                                                                                              \
 		if (data[nbConsumed] != expectedChar)                                                                          \
-			return parseInvalid_(data + nbConsumed, size - nbConsumed) + nbConsumed;                                   \
+			return parseInvalid_(data.substr(nbConsumed)) + nbConsumed;                                                \
 		nbConsumed += 1;                                                                                               \
 		[[fallthrough]];
 		switch (lastValue_)
@@ -368,218 +369,203 @@ class MarantzUartParser
 			CASE(4, 'B')
 			CASE(5, 'Y')
 			case 6: // terminal state
-				if (size == nbConsumed)
+				if (nbConsumed == data.size())
 					return nbConsumed;
 				if (data[nbConsumed] != '\r')
-					return parseInvalid_(data + nbConsumed, size - nbConsumed) + nbConsumed;
+					return parseInvalid_(data.substr(nbConsumed)) + nbConsumed;
 				h_.powerChanged(false);
 				s_ = InternalState::Begin;
 				return nbConsumed + 1;
 		}
-		return parseInvalid_(data, size);
+		return parseInvalid_(data);
 #undef CASE
 	}
 
-	std::size_t parseS_(char const* data, std::size_t size)
+	static constexpr int value_of_char_(char c)
 	{
-		if (size == 0)
-		{
-			s_ = InternalState::Parse_S;
-			return 0;
-		}
-		if (data[0] == 'I')
-		{
-			return parseSI_(data + 1, size - 1) + 1;
-		}
-		return parseInvalid_(data + 1, size - 1) + 1;
+		if (c >= 'A' && c <= 'Z')
+			return c - 'A' + 1;
+		if (c == '/')
+			return 25;
+		if (c >= '0' && c <= '9')
+			return 26 + c - '0';
+		return 0;
 	}
 
-	std::size_t parseSI_(char const* data, std::size_t size)
+	static constexpr int value_of_str(char const* str)
 	{
-		if (size == 0)
-		{
-			s_ = InternalState::Parse_SI;
+		if (*str == 0)
 			return 0;
-		}
+		return value_of_char_(*str) + (36 * (value_of_str(str + 1) % 59652323)); // this constant ensures no overflow
+	}
+
+	std::size_t parseSI_(std::string_view data)
+	{
+		IF_EMPTY_RETURN_0(data, InternalState::Parse_SI)
 #define CASE(value, expected, nextvalue)                                                                               \
-	case value:                                                                                                        \
+	case value_of_str(value):                                                                                          \
 		if (data[i] != expected)                                                                                       \
-			return parseInvalid_(data + i, size - i) + i;                                                              \
-		lastValue_ = nextvalue;                                                                                        \
+			return parseInvalid_(data.substr(i)) + i;                                                                  \
+		lastValue_ = value_of_str(nextvalue);                                                                          \
 		break
 
 #define CASE_TERM(value, source)                                                                                       \
-	case value:                                                                                                        \
+	case value_of_str(value):                                                                                          \
 		if (data[i] != '\r')                                                                                           \
-			return parseInvalid_(data + i, size - i) + i;                                                              \
+			return parseInvalid_(data.substr(i)) + i;                                                                  \
 		h_.sourceChanged(source);                                                                                      \
 		return i + 1
 
-		for (std::size_t i = 0u; i < size; ++i)
+		for (std::size_t i = 0u; i < data.size(); ++i)
 		{
 			switch (lastValue_)
 			{
 				case 0: // use lastValue_ to store state of parser
-					if (data[i] == 'A') // AUX...
-					{
-						lastValue_ = 1000;
-						break;
-					}
-					if (data[i] == 'B') // BD/BT
-					{
-						lastValue_ = 20;
-						break;
-					}
-					if (data[i] == 'C') // CD
-					{
-						lastValue_ = 25;
-						break;
-					}
-					if (data[i] == 'D') // DVD
-					{
-						lastValue_ = 300;
-						break;
-					}
-					if (data[i] == 'G') // GAME
-					{
-						lastValue_ = 4000;
-						break;
-					}
-					if (data[i] == 'H') // HDRADIO
-					{
-						lastValue_ = 500000;
-						break;
-					}
-					if (data[i] == 'M') // MPLAY
-					{
-						lastValue_ = 60000;
-						break;
-					}
-					if (data[i] == 'N') // NET
-					{
-						lastValue_ = 700;
-						break;
-					}
-					if (data[i] == 'P') // PHONO
-					{
-						lastValue_ = 80000;
-						break;
-					}
-					if (data[i] == 'S') // SAT/CBL
-					{
-						lastValue_ = 9000000;
-						break;
-					}
-					if (data[i] == 'T') // TV/Tuner
-					{
-						lastValue_ = 0xA0000;
-						break;
-					}
-					return parseInvalid_(data + i, size - i) + i;
-					CASE(1000, 'U', 1100);
-					CASE(1100, 'X', 1110);
-				case 1110:
-					if (std::isdigit(data[i]))
-					{
-						lastValue_ += data[i] - '0';
-						break;
-					}
-					return parseInvalid_(data + i, size - i) + i;
-				case 1111:
-				case 1112:
-				case 1113:
-				case 1114:
-				case 1115:
-				case 1116:
-				case 1117:
 					if (data[i] != '\r')
-						return parseInvalid_(data + i, size - i) + i;
-					h_.sourceChanged(static_cast<Source>(static_cast<int>(Source::Aux1) + lastValue_ - 1111));
+						lastValue_ = value_of_char_(data[i]);
+					else
+						return parseInvalid_(data);
+					break;
+
+					CASE("A", 'U', "AU");
+					CASE("AU", 'X', "AUX");
+				case value_of_str("AUX"):
+					if (data[i] == '1')
+						lastValue_ = value_of_str("AUX1");
+					else if (data[i] == '2')
+						lastValue_ = value_of_str("AUX2");
+					else if (data[i] == '3')
+						lastValue_ = value_of_str("AUX3");
+					else if (data[i] == '4')
+						lastValue_ = value_of_str("AUX4");
+					else if (data[i] == '5')
+						lastValue_ = value_of_str("AUX5");
+					else if (data[i] == '6')
+						lastValue_ = value_of_str("AUX6");
+					else if (data[i] == '7')
+						lastValue_ = value_of_str("AUX7");
+					else
+						return parseInvalid_(data.substr(i)) + i;
+					break;
+				case value_of_str("AUX1"):
+					if (data[i] != '\r')
+						return parseInvalid_(data.substr(i)) + i;
+					h_.sourceChanged(Source::Aux1);
 					return i + 1;
-				case 20: // BD/BT
+				case value_of_str("AUX2"):
+					if (data[i] != '\r')
+						return parseInvalid_(data.substr(i)) + i;
+					h_.sourceChanged(Source::Aux2);
+					return i + 1;
+				case value_of_str("AUX3"):
+					if (data[i] != '\r')
+						return parseInvalid_(data.substr(i)) + i;
+					h_.sourceChanged(Source::Aux3);
+					return i + 1;
+				case value_of_str("AUX4"):
+					if (data[i] != '\r')
+						return parseInvalid_(data.substr(i)) + i;
+					h_.sourceChanged(Source::Aux4);
+					return i + 1;
+				case value_of_str("AUX5"):
+					if (data[i] != '\r')
+						return parseInvalid_(data.substr(i)) + i;
+					h_.sourceChanged(Source::Aux5);
+					return i + 1;
+				case value_of_str("AUX6"):
+					if (data[i] != '\r')
+						return parseInvalid_(data.substr(i)) + i;
+					h_.sourceChanged(Source::Aux6);
+					return i + 1;
+				case value_of_str("AUX7"):
+					if (data[i] != '\r')
+						return parseInvalid_(data.substr(i)) + i;
+					h_.sourceChanged(Source::Aux7);
+					return i + 1;
+				case value_of_str("B"): // BD/BT
 					if (data[i] == 'D')
 					{
-						lastValue_ = 21;
+						lastValue_ = value_of_str("BD");
 						break;
 					}
 					if (data[i] == 'T')
 					{
-						lastValue_ = 22;
+						lastValue_ = value_of_str("BT");
 						break;
 					}
-					return parseInvalid_(data + i, size - i) + i;
-					CASE_TERM(21, Source::Bluray);
-					CASE_TERM(22, Source::Bluetooth);
+					return parseInvalid_(data.substr(i)) + i;
+					CASE_TERM("BD", Source::Bluray);
+					CASE_TERM("BT", Source::Bluetooth);
 
-					CASE(25, 'D', 26); // CD
-					CASE_TERM(26, Source::CD);
+					CASE("C", 'D', "CD"); // CD
+					CASE_TERM("CD", Source::CD);
 
-					CASE(300, 'V', 310); // DVD
-					CASE(310, 'D', 311);
-					CASE_TERM(311, Source::DVD);
+					CASE("D", 'V', "DV"); // DVD
+					CASE("DV", 'D', "DVD");
+					CASE_TERM("DVD", Source::DVD);
 
-					CASE(4000, 'A', 4100); // GAME
-					CASE(4100, 'M', 4110);
-					CASE(4110, 'E', 4111);
-					CASE_TERM(4111, Source::Game);
+					CASE("G", 'A', "GA"); // GAME
+					CASE("GA", 'M', "GAM");
+					CASE("GAM", 'E', "GAME");
+					CASE_TERM("GAME", Source::Game);
 
-					CASE(500000, 'D', 510000); // HDRADIO
-					CASE(510000, 'R', 511000);
-					CASE(511000, 'A', 511100);
-					CASE(511100, 'D', 511110);
-					CASE(511110, 'I', 511111);
-					CASE(511111, 'O', 511112);
-					CASE_TERM(511112, Source::HdRadio);
+					CASE("H", 'D', "HD"); // HDRADIO
+					CASE("HD", 'R', "HDR");
+					CASE("HDR", 'A', "HDRA");
+					CASE("HDRA", 'D', "HDRAD");
+					CASE("HDRAD", 'I', "HDRADI");
+					CASE("HDRADI", 'O', "HDRADIO");
+					CASE_TERM("HDRADIO", Source::HdRadio);
 
-					CASE(60000, 'P', 61000); // MPLAY
-					CASE(61000, 'L', 61100);
-					CASE(61100, 'A', 61110);
-					CASE(61110, 'Y', 61111);
-					CASE_TERM(61111, Source::Multimedia);
+					CASE("M", 'P', "MP"); // MPLAY
+					CASE("MP", 'L', "MPL");
+					CASE("MPL", 'A', "MPLA");
+					CASE("MPLA", 'Y', "MPLAY");
+					CASE_TERM("MPLAY", Source::Multimedia);
 
-					CASE(700, 'E', 710); // NET
-					CASE(710, 'T', 711);
-					CASE_TERM(711, Source::Network);
+					CASE("N", 'E', "NE"); // NET
+					CASE("NE", 'T', "NET");
+					CASE_TERM("NET", Source::Network);
 
-					CASE(80000, 'H', 81000); // PHONO
-					CASE(81000, 'O', 81100);
-					CASE(81100, 'N', 81110);
-					CASE(81110, 'O', 81111);
-					CASE_TERM(81111, Source::Phono);
+					CASE("P", 'H', "PH"); // PHONO
+					CASE("PH", 'O', "PHO");
+					CASE("PHO", 'N', "PHON");
+					CASE("PHON", 'O', "PHONO");
+					CASE_TERM("PHONO", Source::Phono);
 
-					CASE(9000000, 'A', 9100000); // SAT/CBL
-					CASE(9100000, 'T', 9110000); // SAT/CBL
-					CASE(9110000, '/', 9111000); // SAT/CBL
-					CASE(9111000, 'C', 9111100); // SAT/CBL
-					CASE(9111100, 'B', 9111110); // SAT/CBL
-					CASE(9111110, 'L', 9111111); // SAT/CBL
-					CASE_TERM(9111111, Source::Cable_Sat); // SAT/CBL
+					CASE("S", 'A', "SA"); // SAT/CBL
+					CASE("SA", 'T', "SAT");
+					CASE("SAT", '/', "SAT/");
+					CASE("SAT/", 'C', "SAT/C");
+					CASE("SAT/C", 'B', "SAT/CB");
+					CASE("SAT/CB", 'L', "SAT/CBL");
+					CASE_TERM("SAT/CBL", Source::Cable_Sat);
 
-				case 0xA0000:
+				case value_of_str("T"):
 					if (data[i] == 'V') // TV
 					{
-						lastValue_ = 0xA1000;
+						lastValue_ = value_of_str("TV");
 						break;
 					}
 					if (data[i] == 'U') // TUNER
 					{
-						lastValue_ = 0xA2000;
+						lastValue_ = value_of_str("TU");
 						break;
 					}
-					return parseInvalid_(data + i, size - i) + i;
+					return parseInvalid_(data.substr(i)) + i;
 
-					CASE_TERM(0xA1000, Source::TV);
+					CASE_TERM("TV", Source::TV);
 
-					CASE(0xA2000, 'N', 0xA2100);
-					CASE(0xA2100, 'E', 0xA2110);
-					CASE(0xA2110, 'R', 0xA2111);
-					CASE_TERM(0xA2111, Source::Tuner);
+					CASE("TU", 'N', "TUN");
+					CASE("TUN", 'E', "TUNE");
+					CASE("TUNE", 'R', "TUNER");
+					CASE_TERM("TUNER", Source::Tuner);
 				default:
-					return parseInvalid_(data + i, size - i) + 1;
+					return parseInvalid_(data.substr(i)) + 1;
 			}
 		}
 		s_ = InternalState::Parse_SI;
-		return size;
+		return data.size();
 #undef CASE
 #undef CASE_TERM
 	}
@@ -655,6 +641,10 @@ constexpr char const* queryMasterVolume = "MV?\n";
 constexpr char const* masterVolumeUpCommand = "MVUP\n";
 constexpr char const* masterVolumeDownCommand = "MVDOWN\n";
 
+constexpr char const* queryMute = "MU?\n";
+constexpr char const* muteOnCommand = "MUON\n";
+constexpr char const* muteOffCommand = "MUOFF\n";
+
 constexpr char const* queryPowerStatus = "PW?\n";
 constexpr char const* powerOnCommand = "PWON\n";
 constexpr char const* powerOffCommand = "PWSTANDBY\n";
@@ -669,5 +659,4 @@ constexpr char const* querySourceInput = "SI?\n";
 } // namespace tgcm
 } // namespace eu
 
-
-#endif // JBC_MARANTZUART_H
+#endif // EU_TGCM_AVRCOMMAND_MARANTZUART_H

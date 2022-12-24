@@ -23,15 +23,21 @@ class RemoteProperty : public QObject
 	}
 	enum State
 	{
-		Unknown, /**< The property has never been read successfully */
-		Reading, /**< The property is unknown, but is currently being read, the answer should arrive soon */
+		Unknown,    /**< The property has never been read successfully */
+		Reading,    /**< The property is unknown, but is currently being read, the answer should arrive soon */
 		Refreshing, /**< The property has been read, and is now being refreshed in case the value changed */
-		UpToDate, /**< The property is up to date */
-		OutOfDate, /**< The property has been read, but for some reason is out of date. Its value may have
-		                changed since the last time it was read */
-		ReadError /**< The property has never been read, and the read retrieved an error */
+		UpToDate,   /**< The property is up to date */
+		OutOfDate,  /**< The property has been read, but for some reason is out of date. Its value may have
+		                 changed since the last time it was read */
+		ReadError   /**< The property has never been read, and the read retrieved an error */
 	};
 	Q_ENUM(State)
+
+  signals:
+	void refreshRequested();
+
+  public slots:
+	void refresh();
 };
 
 class RemoteIntProperty
