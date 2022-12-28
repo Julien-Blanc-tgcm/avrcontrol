@@ -142,7 +142,7 @@ void AvrDevicePrivate::setVolume_(int newVolume)
 {
 	volume_.setValue(newVolume);
 	volume_.setState(RemoteProperty::UpToDate);
-	emit q_ptr->volumeChanged();
+	emit q_ptr->volumeChanged(newVolume);
 }
 
 void AvrDevicePrivate::setStandby_(bool newStandby)
@@ -302,21 +302,30 @@ void AvrDevice::setVolume(int volume)
 
 void AvrDevice::refreshVolume()
 {
-	d_ptr->socket_->write(avrcommand::queryMasterVolume);
-	d_ptr->socket_->write(avrcommand::queryMute);
+	if (d_ptr->connectionStatus_ == Connected)
+	{
+		d_ptr->socket_->write(avrcommand::queryMasterVolume);
+		d_ptr->socket_->write(avrcommand::queryMute);
+	}
 }
 
 void AvrDevice::refreshCurrentSource()
 {
-	d_ptr->socket_->write(avrcommand::querySourceInput);
+	if (d_ptr->connectionStatus_ == Connected)
+	{
+		d_ptr->socket_->write(avrcommand::querySourceInput);
+	}
 }
 
 void AvrDevice::setMuted(bool muted)
 {
-	if (muted)
-		d_ptr->socket_->write(avrcommand::muteOnCommand);
-	else
-		d_ptr->socket_->write(avrcommand::muteOffCommand);
+	if (d_ptr->connectionStatus_ == Connected)
+	{
+		if (muted)
+			d_ptr->socket_->write(avrcommand::muteOnCommand);
+		else
+			d_ptr->socket_->write(avrcommand::muteOffCommand);
+	}
 }
 
 void AvrDevice::setPowerStandby(bool standby)
@@ -347,11 +356,6 @@ void AvrDevicePrivate::maxVolumeChanged(int maxVolume)
 void AvrDevicePrivate::powerChanged(bool power)
 {
 	setStandby_(!power);
-	if (initPhase_)
-	{
-		int ret = socket_->write(avrcommand::queryMasterVolume);
-		qDebug() << ret;
-	}
 }
 
 void AvrDevicePrivate::sourceChanged(avrcommand::Source source)

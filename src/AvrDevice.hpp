@@ -105,7 +105,7 @@ class AvrDevice : public QObject
 	void nameChanged();
 	void addressChanged();
 	void connectionStatusChanged();
-	void volumeChanged();
+	void volumeChanged(int volume);
 	void currentSourceChanged();
 	void sourcesChanged();
 	void minVolumeChanged();

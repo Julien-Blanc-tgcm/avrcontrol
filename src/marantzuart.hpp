@@ -127,8 +127,12 @@ class MarantzUartParser
 				return parseMU_(data);
 			case InternalState::Parse_MUO:
 				return parseMUO_(data);
+			case InternalState::Parse_MUON:
+				return parseMUON_(data);
 			case InternalState::Parse_MUOF:
 				return parseMUOF_(data);
+			case InternalState::Parse_MUOFF:
+				return parseMUOFF_(data);
 			case InternalState::Parse_P:
 				return parseP_(data);
 			case InternalState::Parse_PW:
