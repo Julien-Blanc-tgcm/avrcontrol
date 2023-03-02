@@ -67,6 +67,10 @@ class AvrDevicePrivate
 
 	bool initPhase_{};
 
+	bool mainZoneOn_{};
+
+	bool zone2On_{};
+
 	avrcommand::MarantzUartParser<AvrDevicePrivate> parser_;
 
   public: // MarantzUartParser interface must be private
@@ -75,11 +79,15 @@ class AvrDevicePrivate
 	void powerChanged(bool power);
 	void sourceChanged(avrcommand::Source source);
 	void mutedChanged(bool muted);
+	void mainZoneOnChanged(bool on);
+	void zone2OnChanged(bool on);
 
   private:
 	void setVolume_(int volume);
 	void setStandby_(bool standby);
 	void setMuted_(bool mute);
+	void setMainZoneOn_(bool on);
+	void setZone2On_(bool on);
 };
 
 AvrDevice::AvrDevice(QObject* parent) : QObject(parent), d_ptr(new AvrDevicePrivate(this))
@@ -149,6 +157,18 @@ void AvrDevicePrivate::setStandby_(bool newStandby)
 {
 	standby_ = newStandby;
 	emit q_ptr->standbyChanged();
+}
+
+void AvrDevicePrivate::setMainZoneOn_(bool newOn)
+{
+	mainZoneOn_ = newOn;
+	emit q_ptr->mainZoneOnChanged();
+}
+
+void AvrDevicePrivate::setZone2On_(bool newOn)
+{
+	zone2On_ = newOn;
+	emit q_ptr->zone2OnChanged();
 }
 
 RemoteStringProperty AvrDevice::currentSource() const
@@ -245,6 +265,16 @@ bool AvrDevice::standby() const
 	return d_ptr->standby_;
 }
 
+bool AvrDevice::mainZoneOn() const
+{
+	return d_ptr->mainZoneOn_;
+}
+
+bool AvrDevice::zone2On() const
+{
+	return d_ptr->zone2On_;
+}
+
 bool AvrDevice::muted() const
 {
 	return d_ptr->muted_;
@@ -267,6 +297,16 @@ void AvrDevicePrivate::masterVolumeChanged(int volume)
 	setVolume_(volume);
 }
 
+void AvrDevicePrivate::mainZoneOnChanged(bool on)
+{
+	setMainZoneOn_(on);
+}
+
+void AvrDevicePrivate::zone2OnChanged(bool on)
+{
+	setZone2On_(on);
+}
+
 void AvrDevicePrivate::mutedChanged(bool muted)
 {
 	setMuted_(muted);
@@ -285,6 +325,28 @@ void AvrDevice::volumeDown()
 	if (d_ptr->connectionStatus_ == Connected)
 	{
 		d_ptr->socket_->write(avrcommand::masterVolumeDownCommand);
+	}
+}
+
+void AvrDevice::setMainZoneOn(bool on)
+{
+	if (d_ptr->connectionStatus_ == Connected)
+	{
+		if (on)
+			d_ptr->socket_->write(avrcommand::mainZoneOnCommand);
+		else
+			d_ptr->socket_->write(avrcommand::mainZoneOffCommand);
+	}
+}
+
+void AvrDevice::setZone2On(bool on)
+{
+	if (d_ptr->connectionStatus_ == Connected)
+	{
+		if (on)
+			d_ptr->socket_->write(avrcommand::zone2OnCommand);
+		else
+			d_ptr->socket_->write(avrcommand::zone2OffCommand);
 	}
 }
 

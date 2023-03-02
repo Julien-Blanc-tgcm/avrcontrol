@@ -49,6 +49,9 @@ class AvrDevice : public QObject
 	Q_PROPERTY(bool standby READ standby NOTIFY standbyChanged)
 	Q_PROPERTY(bool muted READ muted NOTIFY mutedChanged)
 
+	Q_PROPERTY(bool mainZoneOn READ mainZoneOn NOTIFY mainZoneOnChanged)
+	Q_PROPERTY(bool zone2On READ zone2On NOTIFY zone2OnChanged)
+
 	const QString &name() const;
 	void setName(const QString &newName);
 
@@ -84,6 +87,9 @@ class AvrDevice : public QObject
 
 	bool muted() const;
 
+	bool mainZoneOn() const;
+	bool zone2On() const;
+
 	Q_INVOKABLE void volumeUp();
 	Q_INVOKABLE void volumeDown();
 	Q_INVOKABLE void setVolume(int volume);
@@ -91,9 +97,12 @@ class AvrDevice : public QObject
 	Q_INVOKABLE void setMuted(bool muted);
 
 	/**
-	 * Sets the current power standby, for main zone. True to set to standby mode
+	 * Sets the current power standby, for all zones. True to set to standby mode
 	 */
 	Q_INVOKABLE void setPowerStandby(bool standby);
+
+	Q_INVOKABLE void setMainZoneOn(bool on);
+	Q_INVOKABLE void setZone2On(bool on);
 
 	int currentSourceIndex() const;
 
@@ -116,6 +125,9 @@ class AvrDevice : public QObject
 	void currentSourceIndexChanged();
 
 	void mutedChanged();
+
+	void mainZoneOnChanged();
+	void zone2OnChanged();
 
   private:
 	void interpretResponse_(char const* data, int len);

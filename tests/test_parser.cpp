@@ -12,6 +12,8 @@ class ParserCallbacks
 	bool powerStatus = false;
 	Source source;
 	bool muted = false;
+	bool zmon = false;
+	bool z2on = false;
 
 	void masterVolumeChanged(int newMasterVolume)
 	{
@@ -36,6 +38,16 @@ class ParserCallbacks
 	void mutedChanged(bool newMuted)
 	{
 		muted = newMuted;
+	}
+
+	void mainZoneOnChanged(bool on)
+	{
+		zmon = on;
+	}
+
+	void zone2OnChanged(bool on)
+	{
+		z2on = on;
 	}
 };
 
@@ -95,6 +107,13 @@ class TestParser : public QObject
 		std::size_t res = p.parse(line);
 		QVERIFY(c.powerStatus);
 		QVERIFY(res == 5u);
+		c.powerStatus = false;
+		for (int i = 0; i < strlen(line); ++i)
+		{
+			std::string_view l(line + i, 1);
+			p.parse(l);
+		}
+		QVERIFY(c.powerStatus);
 		char line2[] = "PWSTAND";
 		res = p.parse(line2);
 		QVERIFY(res == strlen(line2));
@@ -164,6 +183,35 @@ class TestParser : public QObject
 		res = p.parse(line2);
 		QVERIFY(res == strlen(line2));
 		QVERIFY(!c.muted);
+	}
+
+	void testZM()
+	{
+		char const* line = "ZMON\r";
+		ParserCallbacks c;
+		MarantzUartParser<ParserCallbacks> p(c);
+		auto res = p.parse(line);
+		QVERIFY(res == strlen(line));
+		QVERIFY(c.zmon);
+		c.zmon = false;
+		QVERIFY(!c.zmon);
+		for (int i = 0; i < strlen(line); ++i)
+		{
+			auto l = std::string_view(line + i, 1);
+			p.parse(l);
+		}
+		QVERIFY(c.zmon);
+		char const* line2 = "ZMOFF\r";
+		res = p.parse(line2);
+		QVERIFY(res == strlen(line2));
+		QVERIFY(!c.zmon);
+		c.zmon = true;
+		for (int i = 0; i < strlen(line2); ++i)
+		{
+			auto l = std::string_view(line2 + i, 1);
+			p.parse(l);
+		}
+		QVERIFY(!c.zmon);
 	}
 
   private:

@@ -147,6 +147,28 @@ class MarantzUartParser
 				return parseS_(data);
 			case InternalState::Parse_SI:
 				return parseSI_(data);
+			case InternalState::Parse_Z:
+				return parseZ_(data);
+			case InternalState::Parse_ZM:
+				return parseZM_(data);
+			case InternalState::Parse_ZMO:
+				return parseZMO_(data);
+			case InternalState::Parse_ZMON:
+				return parseZMON_(data);
+			case InternalState::Parse_ZMOF:
+				return parseZMOF_(data);
+			case InternalState::Parse_ZMOFF:
+				return parseZMOFF_(data);
+			case InternalState::Parse_Z2:
+				return parseZ2_(data);
+			case InternalState::Parse_Z2O:
+				return parseZ2O_(data);
+			case InternalState::Parse_Z2ON:
+				return parseZ2ON_(data);
+			case InternalState::Parse_Z2OF:
+				return parseZ2OF_(data);
+			case InternalState::Parse_Z2OFF:
+				return parseZ2OFF_(data);
 		}
 		assert(false && "parser in a very bad state");
 		return data.size(); // should not happen !!!
@@ -175,6 +197,17 @@ class MarantzUartParser
 		Parse_PWS,
 		Parse_S,
 		Parse_SI,
+		Parse_Z,
+		Parse_ZM,
+		Parse_ZMO,
+		Parse_ZMON,
+		Parse_ZMOF,
+		Parse_ZMOFF,
+		Parse_Z2,
+		Parse_Z2O,
+		Parse_Z2ON,
+		Parse_Z2OF,
+		Parse_Z2OFF,
 	};
 
 	Handler& h_;
@@ -197,6 +230,8 @@ class MarantzUartParser
 			return parseP_(data.substr(1)) + 1;
 		if (data[0] == 'S')
 			return parseS_(data.substr(1)) + 1;
+		if (data[0] == 'Z')
+			return parseZ_(data.substr(1)) + 1;
 		// else need to implement
 		return parseInvalid_(data);
 	}
@@ -253,6 +288,7 @@ class MarantzUartParser
 		if (data[0] == '\r')                                                                                           \
 		{                                                                                                              \
 			callback;                                                                                                  \
+			s_ = InternalState::Begin;                                                                                 \
 			return 1;                                                                                                  \
 		}                                                                                                              \
 		return parseInvalid_(data);                                                                                    \
@@ -384,6 +420,18 @@ class MarantzUartParser
 		return parseInvalid_(data);
 #undef CASE
 	}
+
+	PARSE_BINARY_BRANCH(parseZ_, InternalState::Parse_Z, 'M', parseZM_, '2', parseZ2_);
+	PARSE_SINGLE_EXPECTED_CHAR(parseZM_, InternalState::Parse_ZM, 'O', parseZMO_);
+	PARSE_BINARY_BRANCH(parseZMO_, InternalState::Parse_ZMO, 'F', parseZMOF_, 'N', parseZMON_);
+	PARSE_SINGLE_EXPECTED_CHAR(parseZMOF_, InternalState::Parse_ZMOF, 'F', parseZMOFF_);
+	PARSE_TERMINAL(parseZMON_, InternalState::Parse_ZMON, h_.mainZoneOnChanged(true));
+	PARSE_TERMINAL(parseZMOFF_, InternalState::Parse_ZMOFF, h_.mainZoneOnChanged(false));
+	PARSE_SINGLE_EXPECTED_CHAR(parseZ2_, InternalState::Parse_Z2, 'O', parseZ2O_);
+	PARSE_BINARY_BRANCH(parseZ2O_, InternalState::Parse_Z2O, 'F', parseZ2OF_, 'N', parseZ2ON_);
+	PARSE_SINGLE_EXPECTED_CHAR(parseZ2OF_, InternalState::Parse_Z2OF, 'F', parseZ2OFF_);
+	PARSE_TERMINAL(parseZ2ON_, InternalState::Parse_Z2ON, h_.zone2OnChanged(true));
+	PARSE_TERMINAL(parseZ2OFF_, InternalState::Parse_Z2OFF, h_.zone2OnChanged(false));
 
 	static constexpr int value_of_char_(char c)
 	{
@@ -653,10 +701,12 @@ constexpr char const* queryPowerStatus = "PW?\n";
 constexpr char const* powerOnCommand = "PWON\n";
 constexpr char const* powerOffCommand = "PWSTANDBY\n";
 
-constexpr char const* queryMasterZonePower = "ZM?\n";
-constexpr char const* masterZonePowerOnCommand = "ZMON\n";
-constexpr char const* masterZonePowerOffCommand = "ZMOFF\n";
-constexpr char const* queryZone2Power = "Z2?\n";
+constexpr char const* queryMainZoneOn = "ZM?\n";
+constexpr char const* mainZoneOnCommand = "ZMON\n";
+constexpr char const* mainZoneOffCommand = "ZMOFF\n";
+constexpr char const* queryZone2On = "Z2?\n";
+constexpr char const* zone2OnCommand = "Z2ON\n";
+constexpr char const* zone2OffCommand = "Z2OFF\n";
 constexpr char const* querySourceInput = "SI?\n";
 
 } // namespace avrcommand
